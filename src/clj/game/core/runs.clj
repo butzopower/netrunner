@@ -124,6 +124,8 @@
                             {:cost [:credit trash-cost]
                              :delayed-completion true
                              :effect (req (trash state side eid card nil)
+                                          (when (:run @state)
+                                            (swap! state assoc-in [:run :did-trash] true))
                                           (swap! state assoc-in [:runner :register :trashed-card] true)
                                           (system-msg state side (str "is forced to pay " trash-msg)))}
                             card nil)

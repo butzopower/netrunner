@@ -31,6 +31,20 @@
       (is (= 2 (get-counters atman :power)) "2 power counters")
       (is (= 2 (:current-strength atman)) "2 current strength"))))
 
+(deftest aumakua-neutralize-all-threats
+  ; Aumakua should not gain counters when card forced trashed via Neutralize All Threats
+  (do-game
+    (new-game
+      (default-corp [(qty "GRNDL Refinery" 1)])
+      (default-runner [(qty "Aumakua" 1) (qty "Neutralize All Threats" 1)]))
+    (play-from-hand state :corp "GRNDL Refinery" "New remote")
+    (take-credits state :corp)
+    (play-from-hand state :runner "Neutralize All Threats")
+    (play-from-hand state :runner "Aumakua")
+    (run-empty-server state "Server 1")
+    (is (= 1 (count (:discard (get-corp)))) "Card was automatically trashed via NAT")
+    (is (= 0 (get-counters (get-program state 0) :virus)) "Aumakua should not have gained virus token")))
+
 (deftest baba-yaga
   (do-game
     (new-game
