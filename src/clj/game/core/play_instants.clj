@@ -10,11 +10,11 @@
     [game.core.gaining :refer [lose]]
     [game.core.initializing :refer [card-init]]
     [game.core.moving :refer [move trash]]
-    [game.core.payment :refer [build-spend-msg can-pay? merge-costs]]
+    [game.core.payment :refer [build-spend-msg can-pay? cost-name merge-costs]]
     [game.core.say :refer [play-sfx system-msg implementation-msg]]
     [game.core.update :refer [update!]]
     [game.macros :refer [wait-for]]
-    [game.utils :refer [same-card? to-keyword]]))
+    [game.utils :refer [enumerate-str same-card? to-keyword]]))
 
 (defn async-rfg
   ([state side eid card] (async-rfg state side eid card nil))
@@ -120,27 +120,32 @@
   ([state side eid card] (play-instant state side eid card nil))
   ([state side eid card {:keys [ignore-cost] :as args}]
    (let [eid (eid-set-defaults eid :source :action :source-type :play)
-         costs (play-instant-costs state side card (dissoc args :cached-costs))]
+         costs (play-instant-costs state side card (dissoc args :cached-costs))
+         [click-costs other-costs] (split-with #(= :click (cost-name %)) costs)]
      ;; ensure the instant can be played
      (if (can-play-instant? state side eid card (assoc args :cached-costs costs))
-       ;; Wait on pay to finish before triggering instant-effect
-       (let [original-zone (:zone card)
-             moved-card (move state side (assoc card :seen true) :play-area)]
-         ;; Only mark the register once costs have been paid and card has been moved
-         (when (has-subtype? card "Run")
-           (swap! state assoc-in [:runner :register :click-type] :run))
-         (wait-for (pay state side (make-eid state eid) moved-card costs {:action :play-instant})
-                   (let [payment-str (:msg async-result)
-                         cost-paid (merge-costs-paid (:cost-paid eid) (:cost-paid async-result))]
-                     (if payment-str
-                       (complete-play-instant state side (assoc eid :cost-paid cost-paid) moved-card payment-str ignore-cost)
-                       ;; could not pay the card's price; put it back and mark the effect as being over.
-                       (let [returned-card (move state side moved-card original-zone)]
-                         (update! state :runner (-> returned-card
-                                                    (dissoc :seen)
-                                                    (assoc
-                                                      :cid (:cid card)
-                                                      :previous-zone (:previous-zone card))))
-                         (effect-completed state side eid))))))
+       ;; need to mark register before click paid see Sundew
+       (do (when (has-subtype? card "Run")
+             (swap! state assoc-in [:runner :register :click-type] :run))
+           (wait-for (pay state side (make-eid state eid) card click-costs {:action :play-instant})
+                     ;; click costs paid
+                     (let [click-payment-str (:msg async-result)
+                           click-cost-paid (:cost-paid async-result)
+                           original-zone (:zone card)
+                           moved-card (move state side (assoc card :seen true) :play-area)]
+                       (wait-for (pay state side (make-eid state eid) moved-card other-costs {:action :play-instant})
+                                 ;; other costs paid
+                                 (let [payment-str (:msg async-result)
+                                       cost-paid (merge-costs-paid (:cost-paid eid) click-cost-paid (:cost-paid async-result))]
+                                   (if (or payment-str click-payment-str)
+                                     (complete-play-instant state side (assoc eid :cost-paid cost-paid) moved-card (enumerate-str (remove nil? [click-payment-str payment-str])) ignore-cost)
+                                     ;; could not pay the card's price; put it back and mark the effect as being over.
+                                     (let [returned-card (move state side moved-card original-zone)]
+                                       (update! state :runner (-> returned-card
+                                                                  (dissoc :seen)
+                                                                  (assoc
+                                                                    :cid (:cid card)
+                                                                    :previous-zone (:previous-zone card))))
+                                       (effect-completed state side eid))))))))
        ;; card's req or other effects was not satisfied; mark the effect as being over.
        (effect-completed state side eid)))))
