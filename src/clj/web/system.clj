@@ -22,6 +22,7 @@
    [monger.core :as mg]
    [org.httpkit.server :refer [run-server server-stop!]]
    [taoensso.sente :as sente]
+   [taoensso.timbre :as timbre]
    [time-literals.data-readers]
    [time-literals.read-write :as read-write]
    [web.angel-arena :as angel-arena]
@@ -32,6 +33,9 @@
    [web.utils :refer [tick]]
    [web.versions :refer [banned-msg frontend-version]]
    [web.ws :refer [ch-chsk event-msg-handler]]))
+
+
+(timbre/set-level! :trace)
 
 (read-write/print-time-literals-clj!)
 
