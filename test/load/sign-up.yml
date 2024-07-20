@@ -1,0 +1,16 @@
+config:
+  target: http://localhost:1042
+  phases:
+    - duration: 60
+      arrivalRate: 1
+      rampTo: 5
+      maxVusers: 10
+      name: Warm up phase
+  engines:
+    playwright:
+      launchOptions:
+        headless: true
+  processor: './flows.js'
+scenarios:
+  - engine: playwright
+    testFunction: 'signupFlow'
